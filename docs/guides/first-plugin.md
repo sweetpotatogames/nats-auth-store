@@ -52,8 +52,8 @@ public class MyPlugin extends JavaPlugin {
         // Register commands
         getCommandRegistry().registerCommand(new HelloCommand());
 
-        // Register event listeners
-        getEventRegistry().register(PlayerConnectEvent.class, this::onPlayerConnect);
+        // Register event listeners (use registerGlobal for player events)
+        getEventRegistry().registerGlobal(PlayerConnectEvent.class, this::onPlayerConnect);
     }
 
     @Override
@@ -67,7 +67,11 @@ public class MyPlugin extends JavaPlugin {
     }
 
     private void onPlayerConnect(PlayerConnectEvent event) {
-        LOGGER.atInfo().log("Player connected: " + event.getPlayer().getName());
+        // Use getPlayerRef() to get the player reference
+        PlayerRef playerRef = event.getPlayerRef();
+        if (playerRef != null) {
+            LOGGER.atInfo().log("Player connected: " + playerRef.getUuid());
+        }
     }
 }
 ```
@@ -158,21 +162,30 @@ public class TeleportCommand extends CommandBase {
 ```java
 @Override
 protected void setup() {
-    // Lambda style
-    getEventRegistry().register(PlayerConnectEvent.class, event -> {
-        LOGGER.atInfo().log("Player joined: " + event.getPlayer().getName());
+    // Player events use registerGlobal (they're server-wide)
+    getEventRegistry().registerGlobal(PlayerConnectEvent.class, event -> {
+        PlayerRef playerRef = event.getPlayerRef();
+        if (playerRef != null) {
+            LOGGER.atInfo().log("Player joined: " + playerRef.getUuid());
+        }
     });
 
     // Method reference
-    getEventRegistry().register(PlayerDisconnectEvent.class, this::onDisconnect);
+    getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, this::onDisconnect);
 
-    // With priority
-    getEventRegistry().register(EventPriority.EARLY, ChatEvent.class, this::onChat);
+    // World events also use registerGlobal
+    getEventRegistry().registerGlobal(AddWorldEvent.class, this::onWorldAdd);
+}
 
-    // Global events (world-level)
-    getEventRegistry().registerGlobal(ChunkPreLoadProcessEvent.class, this::onChunkLoad);
+private void onDisconnect(PlayerDisconnectEvent event) {
+    PlayerRef playerRef = event.getPlayerRef();
+    if (playerRef != null) {
+        LOGGER.atInfo().log("Player left: " + playerRef.getUuid());
+    }
 }
 ```
+
+> **Important:** ECS events like `PlaceBlockEvent` and `BreakBlockEvent` require a different registration approach using `EntityEventSystem`. See [Common API Pitfalls](../api/common-pitfalls.md#ecs-events) for details.
 
 ## Configuration Files
 
@@ -222,11 +235,54 @@ protected CompletableFuture<Void> preLoad() {
 
 Output: `build/libs/my-plugin-1.0.0.jar`
 
-### Install Location
+### Deploy to Mods Folder
 
-Copy to:
+The template includes tasks to automatically copy your plugin to the Hytale Mods folder:
+
+```bash
+# Deploy without version number (recommended for development)
+./gradlew deployPlugin
+
+# Deploy with version number in filename
+./gradlew deployPluginVersioned
+```
+
+The `deployPlugin` task:
+- Builds the project first
+- Removes any previous versions of your plugin from the Mods folder
+- Copies the JAR as `my-plugin.jar` (no version suffix)
+
+### Run the Server
+
+Launch the Hytale server with your plugin loaded:
+
+```bash
+# Run server with plugin from source (development mode)
+./gradlew runServer
+
+# Deploy plugin then run server (loads from Mods folder)
+./gradlew runServerDeployed
+```
+
+The `runServer` task:
+- Builds the project first
+- Loads your plugin directly from the source directory
+- Enables console input for server commands
+- Use `Ctrl+C` to stop the server
+
+The `runServerDeployed` task:
+- Deploys the plugin to the Mods folder first
+- Runs the server loading all mods from the Mods folder
+- Better simulates production environment
+
+> **Note:** Remember to run `auth login device` in the server console the first time to authenticate.
+
+### Manual Install Location
+
+If you prefer to copy manually:
 - Windows: `%appdata%/Hytale/UserData/Mods/`
 - Linux: `~/.local/share/Hytale/UserData/Mods/`
+- macOS: `~/Library/Application Support/Hytale/UserData/Mods/`
 
 ## Debugging Tips
 
@@ -251,8 +307,14 @@ Copy to:
 |---------|----------|
 | Plugin not loading | Check `manifest.json` "Main" class path |
 | Command not found | Verify `registerCommand()` in `setup()` |
-| Events not firing | Check event class name and registration |
+| Events not firing | Check event class name and use `registerGlobal()` for player events |
 | Connection refused | Run `auth login device` in server console |
+| `getDataFolder()` not found | Use `getDataDirectory()` instead |
+| `sendChatMessage()` not found | Use `sendMessage(Message.raw(...))` |
+| `getTranslation()` not found | Use `getPosition()` on TransformComponent |
+| ECS event has no `getEntityRef()` | Use `EntityEventSystem` integration |
+
+> **See Also:** [Common API Pitfalls](../api/common-pitfalls.md) - Comprehensive list of API corrections and correct patterns.
 
 ## Next Steps
 

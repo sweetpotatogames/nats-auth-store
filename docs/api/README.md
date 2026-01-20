@@ -117,16 +117,22 @@ AssetRegistry assets = getAssetRegistry();
 ### Registering Events
 
 ```java
-// Simple registration
-getEventRegistry().register(PlayerConnectEvent.class, event -> {
-    // Handle event
+// Player events use registerGlobal (server-wide events)
+getEventRegistry().registerGlobal(PlayerConnectEvent.class, event -> {
+    PlayerRef playerRef = event.getPlayerRef();
+    if (playerRef != null) {
+        // Handle event using playerRef.getUuid(), playerRef.sendMessage(), etc.
+    }
 });
 
-// With priority
-getEventRegistry().register(EventPriority.EARLY, ChatEvent.class, event -> {
-    // Handle early
+// World events also use registerGlobal
+getEventRegistry().registerGlobal(AddWorldEvent.class, event -> {
+    World world = event.getWorld();
+    // Handle world added
 });
 ```
+
+> **Important:** ECS events like `PlaceBlockEvent` and `BreakBlockEvent` require `EntityEventSystem` integration. See [Common Pitfalls](./common-pitfalls.md#ecs-events) for details.
 
 ### Creating Tasks
 
@@ -154,6 +160,8 @@ getTaskRegistry().runRepeating(() -> {
 - API may change frequently during Early Access
 - Official source code release planned 1-2 months post-launch
 - `BlockState` is deprecated but still functional (as of Jan 2026)
+- `Player.getPlayerRef()` is deprecated but still functional (as of Jan 2026)
+- Many APIs differ from Minecraft/Bukkit patterns - always check decompiled source
 
 ## Additional Resources
 
